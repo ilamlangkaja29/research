@@ -11,7 +11,6 @@
 #define BIN_SENSOR 11          // E18-D80NK IR sensor for bin detection
 #define SERVO_PIN 12           // Servo motor for bin lid
 #define BUZZER A1              // Buzzer for alerts
-#define UV_LED 13              // UV LED for disinfection
 
 // Motor Driver (L298N)
 #define ENA 5
@@ -29,8 +28,8 @@
 #define LOADCELL_DOUT 2
 #define LOADCELL_SCK 3
 
-// LCD Display (Ensure correct I2C address: 0x27 or 0x3F)
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// LCD Display
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Create LCD object with I2C address 0x27
 
 // Sensors and Components
 NewPing sonar(TRIG_PIN, ECHO_PIN, 200);  // Ultrasonic sensor
@@ -43,7 +42,7 @@ long distance;  // Ultrasonic distance
 
 void setup() {
     Serial.begin(9600); // Bluetooth communication
-
+    
     // Motor Pins
     pinMode(ENA, OUTPUT);
     pinMode(IN1, OUTPUT);
@@ -56,8 +55,7 @@ void setup() {
     pinMode(IR_SENSOR, INPUT);
     pinMode(BIN_SENSOR, INPUT);
     pinMode(BUZZER, OUTPUT);
-    pinMode(UV_LED, OUTPUT);
-    
+
     // Load Cell
     scale.begin(LOADCELL_DOUT, LOADCELL_SCK);
 
@@ -66,7 +64,7 @@ void setup() {
     binServo.write(0); // Initial position
 
     // LCD Display
-    lcd.begin(16, 2);
+    lcd.begin();  // Initialize LCD
     lcd.backlight();
     lcd.setCursor(0, 0);
     lcd.print("Robot Initialized");
@@ -92,10 +90,8 @@ void loop() {
     // Bin Detection & Servo Control
     if (digitalRead(BIN_SENSOR) == LOW) {
         binServo.write(90); // Open lid
-        digitalWrite(UV_LED, HIGH); // Turn on UV light
         delay(2000);
         binServo.write(0);  // Close lid
-        digitalWrite(UV_LED, LOW);  // Turn off UV light
     }
 
     // Bluetooth Control
