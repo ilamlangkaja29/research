@@ -29,7 +29,7 @@
 #define LOADCELL_SCK 3
 
 // LCD Display
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+lcd.begin(16, 2); // Specify 16 columns and 2 rows
 
 // Sensors and Components
 NewPing sonar(TRIG_PIN, ECHO_PIN, 200);  // Ultrasonic sensor
@@ -64,10 +64,11 @@ void setup() {
     binServo.write(0); // Initial position
 
     // LCD Display
-    lcd.begin();
+    lcd.begin(16, 2); // Correct initialization
     lcd.backlight();
     lcd.setCursor(0, 0);
     lcd.print("Robot Initialized");
+
 }
 
 void loop() {
