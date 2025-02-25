@@ -64,7 +64,7 @@ void setup() {
     binServo.write(0); // Initial position
 
     // LCD Display
-    lcd.begin();  // Initialize LCD
+    lcd.begin(16, 2);  // Initialize LCD with 16 columns and 2 rows
     lcd.backlight();
     lcd.setCursor(0, 0);
     lcd.print("Robot Initialized");
