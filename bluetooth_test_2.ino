@@ -1,6 +1,6 @@
 #include <SoftwareSerial.h>
 
-SoftwareSerial BTSerial(0, 1); // RX, TX (Use different pins if needed)
+SoftwareSerial BTSerial(10, 11); // RX, TX (Use different pins if needed)
 
 char receivedChar;
 
