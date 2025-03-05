@@ -55,13 +55,15 @@ void loop() {
         }
         
         receivedChar = BTSerial.read();
-        Serial.print("Received: ");
-        Serial.println(receivedChar);
-        lcd.setCursor(0, 0);
-        lcd.print("BT: ");
-        lcd.print(receivedChar);
-        lcd.setCursor(0, 1);
-        handleMotor(receivedChar);
+        if (isValidCommand(receivedChar)) {
+            Serial.print("Received: ");
+            Serial.println(receivedChar);
+            lcd.setCursor(0, 0);
+            lcd.print("BT: ");
+            lcd.print(receivedChar);
+            lcd.setCursor(0, 1);
+            handleMotor(receivedChar);
+        }
     } else {
         if (btConnected) {
             btConnected = false;
@@ -76,10 +78,12 @@ void loop() {
     // Send data from Serial Monitor to Bluetooth
     if (Serial.available()) {
         receivedChar = Serial.read();
-        BTSerial.print(receivedChar);
-        Serial.print("Sent: ");
-        Serial.println(receivedChar);
-        handleMotor(receivedChar);
+        if (isValidCommand(receivedChar)) {
+            BTSerial.print(receivedChar);
+            Serial.print("Sent: ");
+            Serial.println(receivedChar);
+            handleMotor(receivedChar);
+        }
     }
 }
 
@@ -136,4 +140,8 @@ void handleMotor(char command) {
             lcd.print("Invalid Cmd");
             break;
     }
+}
+
+bool isValidCommand(char cmd) {
+    return (cmd == 'F' || cmd == 'B' || cmd == 'L' || cmd == 'R' || cmd == 'S');
 }
