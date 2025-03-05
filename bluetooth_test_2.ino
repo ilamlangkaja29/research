@@ -1,18 +1,25 @@
 #include <SoftwareSerial.h>
 
-SoftwareSerial BTSerial(10, 11); // RX, TX (Use different pins if needed)
-
+SoftwareSerial BTSerial(10, 11); // RX, TX 
+const int BTStatePin = 9; // 
 char receivedChar;
 
 void setup() {
-    Serial.begin(9600);   // Serial Monitor communication
-    BTSerial.begin(9600); // Bluetooth HC-05 communication
+    pinMode(BTStatePin, INPUT);
+    Serial.begin(9600);
+    BTSerial.begin(9600);
 
     Serial.println("Bluetooth Test Initialized");
-    Serial.println("Waiting for Bluetooth connection...");
 }
 
 void loop() {
+    // Check Bluetooth connection status
+    if (digitalRead(BTStatePin) == HIGH) {
+        Serial.println("Bluetooth Connected!");
+    } else {
+        Serial.println("Waiting for Bluetooth connection...");
+    }
+
     // Check if data is received from Bluetooth
     if (BTSerial.available()) {
         receivedChar = BTSerial.read();
@@ -27,4 +34,6 @@ void loop() {
         Serial.print("Sent to Bluetooth: ");
         Serial.println(receivedChar);
     }
+
+    delay(1000); // Reduce serial spam
 }
