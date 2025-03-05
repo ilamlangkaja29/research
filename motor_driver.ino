@@ -25,6 +25,7 @@ void setup() {
     // Initialize LCD
     lcd.init();
     lcd.backlight();
+    delay(100); // Short delay for LCD stability
     lcd.setCursor(0, 0);
     lcd.print("BT & Motor Test");
 
@@ -56,11 +57,20 @@ void loop() {
         receivedChar = BTSerial.read();
         Serial.print("Received: ");
         Serial.println(receivedChar);
-        lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("BT: ");
         lcd.print(receivedChar);
+        lcd.setCursor(0, 1);
         handleMotor(receivedChar);
+    } else {
+        if (btConnected) {
+            btConnected = false;
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("No BT Signal");
+            lcd.setCursor(0, 1);
+            lcd.print("Waiting...");
+        }
     }
 
     // Send data from Serial Monitor to Bluetooth
@@ -74,6 +84,8 @@ void loop() {
 }
 
 void handleMotor(char command) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
     switch (command) {
         case 'F': // Forward
             digitalWrite(IN1, HIGH);
@@ -82,7 +94,6 @@ void handleMotor(char command) {
             digitalWrite(IN4, LOW);
             analogWrite(ENA, 150);
             analogWrite(ENB, 150);
-            lcd.setCursor(0, 1);
             lcd.print("Moving Forward");
             break;
         case 'B': // Backward
@@ -92,7 +103,6 @@ void handleMotor(char command) {
             digitalWrite(IN4, HIGH);
             analogWrite(ENA, 150);
             analogWrite(ENB, 150);
-            lcd.setCursor(0, 1);
             lcd.print("Moving Backward");
             break;
         case 'L': // Left
@@ -102,7 +112,6 @@ void handleMotor(char command) {
             digitalWrite(IN4, LOW);
             analogWrite(ENA, 150);
             analogWrite(ENB, 150);
-            lcd.setCursor(0, 1);
             lcd.print("Turning Left");
             break;
         case 'R': // Right
@@ -112,7 +121,6 @@ void handleMotor(char command) {
             digitalWrite(IN4, HIGH);
             analogWrite(ENA, 150);
             analogWrite(ENB, 150);
-            lcd.setCursor(0, 1);
             lcd.print("Turning Right");
             break;
         case 'S': // Stop
@@ -122,11 +130,9 @@ void handleMotor(char command) {
             digitalWrite(IN4, LOW);
             analogWrite(ENA, 0);
             analogWrite(ENB, 0);
-            lcd.setCursor(0, 1);
-            lcd.print("Stopped   ");
+            lcd.print("Stopped");
             break;
         default:
-            lcd.setCursor(0, 1);
             lcd.print("Invalid Cmd");
             break;
     }
