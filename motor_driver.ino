@@ -4,6 +4,7 @@
 
 // Bluetooth module
 SoftwareSerial BTSerial(10, 11); // RX, TX
+#define BT_STATE 13 // Bluetooth state pin
 char receivedChar;
 bool btConnected = false;
 
@@ -37,39 +38,24 @@ void setup() {
     pinMode(IN4, OUTPUT);
     pinMode(ENB, OUTPUT);
     
+    // Initialize Bluetooth state pin
+    pinMode(BT_STATE, INPUT);
+    
     Serial.println("System Initialized");
     lcd.setCursor(0, 1);
     lcd.print("Waiting for BT...");
 }
 
 void loop() {
-    // Check for Bluetooth connection
-    static unsigned long lastCheck = 0;
-    if (millis() - lastCheck > 2000) {  // Check connection every 2 seconds
-        lastCheck = millis();
-        BTSerial.print("?"); // Send a test character
-    }
-
-    if (BTSerial.available()) {
-        char testResponse = BTSerial.read();
-        if (!btConnected && testResponse != '?') {
+    // Check Bluetooth connection state
+    if (digitalRead(BT_STATE) == HIGH) {
+        if (!btConnected) {
             btConnected = true;
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print("BT Connected");
             lcd.setCursor(0, 1);
-            lcd.print("Waiting for Cmd");
-        }
-        
-        receivedChar = testResponse;
-        if (isValidCommand(receivedChar)) {
-            Serial.print("Received: ");
-            Serial.println(receivedChar);
-            lcd.setCursor(0, 0);
-            lcd.print("BT: ");
-            lcd.print(receivedChar);
-            lcd.setCursor(0, 1);
-            handleMotor(receivedChar);
+            lcd.print("Ready for Cmd");
         }
     } else {
         if (btConnected) {
@@ -79,6 +65,20 @@ void loop() {
             lcd.print("No BT Signal");
             lcd.setCursor(0, 1);
             lcd.print("Waiting...");
+        }
+    }
+
+    // Check if Bluetooth is sending data
+    if (BTSerial.available()) {
+        receivedChar = BTSerial.read();
+        if (isValidCommand(receivedChar)) {
+            Serial.print("Received: ");
+            Serial.println(receivedChar);
+            lcd.setCursor(0, 0);
+            lcd.print("BT: ");
+            lcd.print(receivedChar);
+            lcd.setCursor(0, 1);
+            handleMotor(receivedChar);
         }
     }
 
