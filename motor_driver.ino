@@ -5,6 +5,7 @@
 // Bluetooth module
 SoftwareSerial BTSerial(10, 11); // RX, TX
 char receivedChar;
+bool btConnected = false;
 
 // Motor Driver (L298N)
 #define ENA 5
@@ -37,12 +38,21 @@ void setup() {
     
     Serial.println("System Initialized");
     lcd.setCursor(0, 1);
-    lcd.print("Waiting...");
+    lcd.print("Waiting for BT...");
 }
 
 void loop() {
-    // Bluetooth data reception
+    // Check for Bluetooth connection
     if (BTSerial.available()) {
+        if (!btConnected) {
+            btConnected = true;
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("BT Connected");
+            lcd.setCursor(0, 1);
+            lcd.print("Waiting for Cmd");
+        }
+        
         receivedChar = BTSerial.read();
         Serial.print("Received: ");
         Serial.println(receivedChar);
