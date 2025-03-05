@@ -44,8 +44,15 @@ void setup() {
 
 void loop() {
     // Check for Bluetooth connection
+    static unsigned long lastCheck = 0;
+    if (millis() - lastCheck > 2000) {  // Check connection every 2 seconds
+        lastCheck = millis();
+        BTSerial.print("?"); // Send a test character
+    }
+
     if (BTSerial.available()) {
-        if (!btConnected) {
+        char testResponse = BTSerial.read();
+        if (!btConnected && testResponse != '?') {
             btConnected = true;
             lcd.clear();
             lcd.setCursor(0, 0);
@@ -54,7 +61,7 @@ void loop() {
             lcd.print("Waiting for Cmd");
         }
         
-        receivedChar = BTSerial.read();
+        receivedChar = testResponse;
         if (isValidCommand(receivedChar)) {
             Serial.print("Received: ");
             Serial.println(receivedChar);
