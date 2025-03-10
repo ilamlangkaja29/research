@@ -1,26 +1,92 @@
-char receivedChar; // Variable to store received data
+#include <SoftwareSerial.h>
+#include <LiquidCrystal_I2C.h>
+
+SoftwareSerial BTSerial(10, 11); // RX, TX
+const int BTStatePin = 9;
+char receivedChar;
+bool btConnected = false;
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void setup() {
-    Serial.begin(9600);  // Start serial communication with PC
-    Serial.println("Bluetooth Test Initialized");
+    pinMode(BTStatePin, INPUT);
+    Serial.begin(9600);
+    BTSerial.begin(9600);
     
-    Serial1.begin(9600); // Start serial communication with HC-05 (TX:1, RX:0)
-    Serial.println("Waiting for Bluetooth connection...");
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+    lcd.print("Initializing...");
+    delay(1000);
+    lcd.clear();
+    
+    Serial.println("Bluetooth Test Initialized");
 }
 
 void loop() {
-    // Check if data is received from Bluetooth
-    if (Serial1.available()) {
-        receivedChar = Serial1.read();
-        Serial.print("Received from Bluetooth: ");
-        Serial.println(receivedChar);
+    bool currentBTState = digitalRead(BTStatePin);
+    
+    // Check Bluetooth connection status
+    if (currentBTState && !btConnected) {
+        btConnected = true;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("BT Connected");
+        lcd.setCursor(0, 1);
+        lcd.print("Ready for command");
+        Serial.println("Bluetooth Connected! Ready for command.");
+    } else if (!currentBTState && btConnected) {
+        btConnected = false;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Waiting for BT");
+        Serial.println("Waiting for Bluetooth connection...");
+    }
+    
+    // Debugging: Print available bytes in Bluetooth buffer
+    if (BTSerial.available()) {
+        Serial.print("Bytes Available: ");
+        Serial.println(BTSerial.available());
     }
 
-    // Send data to Bluetooth if entered in Serial Monitor
-    if (Serial.available()) {
-        receivedChar = Serial.read();
-        Serial1.print(receivedChar);
-        Serial.print("Sent to Bluetooth: ");
-        Serial.println(receivedChar);
+    // Check if a single uppercase letter is received
+    while (btConnected && BTSerial.available()) {
+        receivedChar = BTSerial.read();
+        
+        Serial.print("Raw Received: ");
+        Serial.println(receivedChar);  // Debugging
+
+        // Convert to uppercase if lowercase
+        if (receivedChar >= 'a' && receivedChar <= 'z') {
+            receivedChar -= 32;
+        }
+        
+        // Process only uppercase letters (A-Z)
+        if (receivedChar >= 'A' && receivedChar <= 'Z') {
+            Serial.print("Received: ");
+            Serial.println(receivedChar);
+            
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Received: ");
+            lcd.setCursor(10, 0);
+            lcd.print(receivedChar);
+            
+            delay(2000); // Display command before resetting
+            
+            // Flush buffer & debug
+            while (BTSerial.available()) {
+                char flushChar = BTSerial.read();
+                Serial.print("Flushing: ");
+                Serial.println(flushChar);
+            }
+            
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("BT Connected");
+            lcd.setCursor(0, 1);
+            lcd.print("Ready for command");
+            break; // Exit after processing one valid command
+        }
     }
 }
