@@ -1,11 +1,13 @@
 #include <SoftwareSerial.h>
 #include <LiquidCrystal_I2C.h>
 
+// Initialize SoftwareSerial for Bluetooth communication
 SoftwareSerial BTSerial(10, 11); // RX, TX
 const int BTStatePin = 9;
 char receivedChar;
 bool btConnected = false;
 
+// Initialize LCD (Assuming I2C address 0x27, adjust if necessary)
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void setup() {
@@ -13,6 +15,7 @@ void setup() {
     Serial.begin(9600);
     BTSerial.begin(9600);
     
+    // Initialize LCD
     lcd.init();
     lcd.backlight();
     lcd.setCursor(0, 0);
@@ -42,14 +45,14 @@ void loop() {
         lcd.print("Waiting for BT");
         Serial.println("Waiting for Bluetooth connection...");
     }
-    
-    // Debugging: Print available bytes in Bluetooth buffer
+
+    // Debug: Check if any data is available
     if (BTSerial.available()) {
         Serial.print("Bytes Available: ");
         Serial.println(BTSerial.available());
     }
 
-    // Check if a single uppercase letter is received
+    // Check if a single uppercase letter is received from Bluetooth
     while (btConnected && BTSerial.available()) {
         receivedChar = BTSerial.read();
         
@@ -63,7 +66,7 @@ void loop() {
         
         // Process only uppercase letters (A-Z)
         if (receivedChar >= 'A' && receivedChar <= 'Z') {
-            Serial.print("Received: ");
+            Serial.print("Processed Command: ");
             Serial.println(receivedChar);
             
             lcd.clear();
@@ -74,7 +77,7 @@ void loop() {
             
             delay(2000); // Display command before resetting
             
-            // Flush buffer & debug
+            // Flush extra data
             while (BTSerial.available()) {
                 char flushChar = BTSerial.read();
                 Serial.print("Flushing: ");
