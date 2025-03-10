@@ -49,6 +49,8 @@ void loop() {
     // Check if a single uppercase letter is received from Bluetooth
     if (btConnected && BTSerial.available()) {
         receivedChar = BTSerial.read();
+        
+        // Process only uppercase letters
         if (receivedChar >= 'A' && receivedChar <= 'Z') {
             Serial.print("Received: ");
             Serial.println(receivedChar);
@@ -58,7 +60,13 @@ void loop() {
             lcd.print("Received: ");
             lcd.setCursor(10, 0);
             lcd.print(receivedChar);
+            
             delay(2000); // Display command before resetting
+            
+            // Flush any extra characters to avoid interference
+            while (BTSerial.available()) {
+                BTSerial.read();
+            }
             
             lcd.clear();
             lcd.setCursor(0, 0);
