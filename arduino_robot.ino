@@ -3,14 +3,16 @@
 #include <HX711.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
 
 // Pin Configuration
 #define IR_SENSOR 4            // Line Following IR sensor
 #define TRIG_PIN A0            // Ultrasonic sensor trigger
-#define ECHO_PIN A0            // Ultrasonic sensor echo
+#define ECHO_PIN A1            // Ultrasonic sensor echo
 #define BIN_SENSOR 11          // E18-D80NK IR sensor for bin detection
 #define SERVO_PIN 12           // Servo motor for bin lid
-#define BUZZER A1              // Buzzer for alerts
+#define UV_LIGHT_1 13          // UV Light Pin 1
+#define UV_LIGHT_2 A2          // UV Light Pin 2
 
 // Motor Driver (L298N)
 #define ENA 5
@@ -20,29 +22,31 @@
 #define IN4 9
 #define ENB 10
 
-// Bluetooth module (HC-05)
-#define BT_RX 0
-#define BT_TX 1
+// Bluetooth module (HC-05) using SoftwareSerial
+#define BT_RX 10
+#define BT_TX 11
+SoftwareSerial BTSerial(BT_RX, BT_TX);
 
 // Load Cell (HX711)
 #define LOADCELL_DOUT 2
 #define LOADCELL_SCK 3
 
 // LCD Display
-LiquidCrystal_I2C lcd(0x27, 16, 2);  // Create LCD object with I2C address 0x27
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Sensors and Components
-NewPing sonar(TRIG_PIN, ECHO_PIN, 200);  // Ultrasonic sensor
+NewPing sonar(TRIG_PIN, ECHO_PIN, 200);
 Servo binServo;
 HX711 scale;
 
 // Variables
-char command;   // Bluetooth command
-long distance;  // Ultrasonic distance
+char command;
+long distance;
 
 void setup() {
-    Serial.begin(9600); // Bluetooth communication
-    
+    Serial.begin(9600);
+    BTSerial.begin(9600);
+
     // Motor Pins
     pinMode(ENA, OUTPUT);
     pinMode(IN1, OUTPUT);
@@ -54,17 +58,20 @@ void setup() {
     // Sensor Pins
     pinMode(IR_SENSOR, INPUT);
     pinMode(BIN_SENSOR, INPUT);
-    pinMode(BUZZER, OUTPUT);
+    pinMode(UV_LIGHT_1, OUTPUT);
+    pinMode(UV_LIGHT_2, OUTPUT);
 
     // Load Cell
     scale.begin(LOADCELL_DOUT, LOADCELL_SCK);
+    scale.set_offset(-17770);
+    scale.set_scale(0.973008);
 
     // Servo
     binServo.attach(SERVO_PIN);
-    binServo.write(0); // Initial position
+    binServo.write(0);
 
     // LCD Display
-    lcd.begin(16, 2);  // Initialize LCD with 16 columns and 2 rows
+    lcd.init();
     lcd.backlight();
     lcd.setCursor(0, 0);
     lcd.print("Robot Initialized");
@@ -75,28 +82,30 @@ void loop() {
     distance = sonar.ping_cm();
     if (distance > 0 && distance < 10) {
         stopMotors();
-        digitalWrite(BUZZER, HIGH);
-        delay(1000);
-        digitalWrite(BUZZER, LOW);
     }
 
     // Line Following (Automatic Mode)
     if (digitalRead(IR_SENSOR) == LOW) {
         moveForward();
+        delay(100);
     } else {
         stopMotors();
     }
 
-    // Bin Detection & Servo Control
+    // Bin Detection & Servo Control with UV Light
     if (digitalRead(BIN_SENSOR) == LOW) {
         binServo.write(90); // Open lid
+        digitalWrite(UV_LIGHT_1, HIGH);
+        digitalWrite(UV_LIGHT_2, HIGH);
         delay(2000);
         binServo.write(0);  // Close lid
+        digitalWrite(UV_LIGHT_1, LOW);
+        digitalWrite(UV_LIGHT_2, LOW);
     }
 
     // Bluetooth Control
-    if (Serial.available()) {
-        command = Serial.read();
+    if (BTSerial.available()) {
+        command = BTSerial.read();
         executeBluetoothCommand(command);
     }
 
@@ -105,7 +114,7 @@ void loop() {
     lcd.setCursor(0, 1);
     lcd.print("Weight: ");
     lcd.print(weight);
-    lcd.print("g");
+    lcd.print("g  ");
 
     delay(100);
 }
