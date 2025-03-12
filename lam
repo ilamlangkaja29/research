@@ -1,0 +1,150 @@
+#include <Servo.h>
+#include <NewPing.h>
+
+// Pin Configuration
+#define RIGHT_IR_SENSOR 0   // Right IR sensor follower
+#define LEFT_IR_SENSOR 1    // Left IR sensor follower
+#define SERVO_BIN 2         // Servo motor bin
+#define ENA 5               // Motor driver ENA
+#define MOTOR1 6            // Motor 1
+#define MOTOR2 7            // Motor 2
+#define MOTOR3 8            // Motor 3
+#define MOTOR4 9            // Motor 4
+#define ENB 10              // Motor driver ENB
+#define BT_TX 11            // Bluetooth TX
+#define BT_RX 12            // Bluetooth RX
+
+// Analog Pins
+#define ULTRASONIC_ECHO A0  // Ultrasonic sensor echo
+#define ULTRASONIC_TRIG A1  // Ultrasonic sensor trigger
+#define BUZZER A2           // Buzzer
+#define SERVO_IR_SENSOR A3  // IR sensor for servo
+
+// Components
+Servo binServo;
+NewPing sonar(ULTRASONIC_TRIG, ULTRASONIC_ECHO, 200);  // Ultrasonic sensor
+
+// Variables
+char command;
+long distance;
+bool lidOpen = false;
+int motorSpeed = 150; // Default motor speed
+
+void setup() {
+    Serial.begin(9600); // Bluetooth communication
+
+    // Motor Pins
+    pinMode(ENA, OUTPUT);
+    pinMode(MOTOR1, OUTPUT);
+    pinMode(MOTOR2, OUTPUT);
+    pinMode(MOTOR3, OUTPUT);
+    pinMode(MOTOR4, OUTPUT);
+    pinMode(ENB, OUTPUT);
+
+    // Sensor Pins
+    pinMode(RIGHT_IR_SENSOR, INPUT);
+    pinMode(LEFT_IR_SENSOR, INPUT);
+    pinMode(SERVO_IR_SENSOR, INPUT);
+    pinMode(BUZZER, OUTPUT);
+
+    // Servo Setup
+    binServo.attach(SERVO_BIN);
+    binServo.write(0); // Initial position (Closed)
+
+    Serial.println("Robot Initialized");
+}
+
+void loop() {
+    // Ultrasonic Sensor Logic
+    distance = sonar.ping_cm();
+    if (distance > 0 && distance < 20) {
+        stopMotors();
+        digitalWrite(BUZZER, HIGH);
+        delay(1000);
+        digitalWrite(BUZZER, LOW);
+    }
+
+    // Line Following Logic
+    if (digitalRead(RIGHT_IR_SENSOR) == LOW && digitalRead(LEFT_IR_SENSOR) == LOW) {
+        moveForward();
+    } else if (digitalRead(RIGHT_IR_SENSOR) == HIGH) {
+        turnLeft();
+    } else if (digitalRead(LEFT_IR_SENSOR) == HIGH) {
+        turnRight();
+    } else {
+        stopMotors();
+    }
+
+    // Servo IR Sensor Control
+    if (digitalRead(SERVO_IR_SENSOR) == LOW && !lidOpen) {
+        binServo.write(120); // Move servo to 120 degrees
+        lidOpen = true;
+        delay(2000);
+    } else if (digitalRead(SERVO_IR_SENSOR) == HIGH && lidOpen) {
+        closeLid();
+    }
+
+    // Bluetooth Control Logic
+    if (Serial.available()) {
+        command = Serial.read();
+        executeBluetoothCommand(command);
+    }
+
+    delay(100);
+}
+
+// Motor Control Functions
+void moveForward() {
+    digitalWrite(MOTOR1, HIGH);
+    digitalWrite(MOTOR2, LOW);
+    digitalWrite(MOTOR3, HIGH);
+    digitalWrite(MOTOR4, LOW);
+    analogWrite(ENA, motorSpeed);
+    analogWrite(ENB, motorSpeed);
+}
+
+void turnLeft() {
+    digitalWrite(MOTOR1, LOW);
+    digitalWrite(MOTOR2, HIGH);
+    digitalWrite(MOTOR3, HIGH);
+    digitalWrite(MOTOR4, LOW);
+}
+
+void turnRight() {
+    digitalWrite(MOTOR1, HIGH);
+    digitalWrite(MOTOR2, LOW);
+    digitalWrite(MOTOR3, LOW);
+    digitalWrite(MOTOR4, HIGH);
+}
+
+void stopMotors() {
+    digitalWrite(MOTOR1, LOW);
+    digitalWrite(MOTOR2, LOW);
+    digitalWrite(MOTOR3, LOW);
+    digitalWrite(MOTOR4, LOW);
+}
+
+// Bin Control Functions
+void openLid() {
+    binServo.write(90); // Open lid
+    lidOpen = true;
+    delay(2000);
+}
+
+void closeLid() {
+    binServo.write(0); // Close lid
+    lidOpen = false;
+}
+
+// Bluetooth Command Execution
+void executeBluetoothCommand(char cmd) {
+    switch (cmd) {
+        case 'F': moveForward(); break;
+        case 'L': turnLeft(); break;
+        case 'R': turnRight(); break;
+        case 'S': stopMotors(); break;
+        case '+': motorSpeed = min(motorSpeed + 10, 255); break;
+        case '-': motorSpeed = max(motorSpeed - 10, 0); break;
+        default: break;
+    }
+}
