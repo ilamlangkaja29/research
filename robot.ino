@@ -1,24 +1,26 @@
-// HC-05 Bluetooth Controlled Motor Driver Code with L298N (4-pin control)
-// Uses RX (Pin 0) and TX (Pin 1) for Bluetooth communication
+#include <SoftwareSerial.h>
 
-#define IN1 4     // L298N IN1 Pin
-#define IN2 5     // L298N IN2 Pin
-#define IN3 6     // L298N IN3 Pin
-#define IN4 7     // L298N IN4 Pin
-#define ENA 8     // L298N ENA (Speed Control)
-#define ENB 9     // L298N ENB (Speed Control)
+SoftwareSerial BTSerial(10, 11); // RX, TX (Arduino -> HC-05)
+
+#define IN1 4     
+#define IN2 5     
+#define IN3 6     
+#define IN4 7     
+#define ENA 8     
+#define ENB 9     
 
 void setup() {
-    Serial.begin(9600);        // Serial Monitor communication
+    Serial.begin(9600);   // For Serial Monitor
+    BTSerial.begin(9600); // For Bluetooth HC-05
 
     pinMode(IN1, OUTPUT);
     pinMode(IN2, OUTPUT);
     pinMode(IN3, OUTPUT);
     pinMode(IN4, OUTPUT);
-    pinMode(ENA, OUTPUT);      // Motor A speed control
-    pinMode(ENB, OUTPUT);      // Motor B speed control
+    pinMode(ENA, OUTPUT);
+    pinMode(ENB, OUTPUT);
 
-    digitalWrite(IN1, LOW);    // Motors OFF initially
+    digitalWrite(IN1, LOW);
     digitalWrite(IN2, LOW);
     digitalWrite(IN3, LOW);
     digitalWrite(IN4, LOW);
@@ -29,15 +31,13 @@ void setup() {
 }
 
 void loop() {
-    if (Serial.available()) {  // Read from Bluetooth (RX/TX Pins)
-        String received = Serial.readString();
-        received.trim();  // Remove whitespace and newline characters
+    if (BTSerial.available()) {  // Read from Bluetooth
+        String received = BTSerial.readString();
+        received.trim();
 
-        // Reflect received command to the serial monitor
         Serial.print("Received command: ");
         Serial.println(received);
 
-        // Motor control commands
         if (received == "F") {
             Serial.println("Executing: FORWARD");
             digitalWrite(IN1, HIGH);
