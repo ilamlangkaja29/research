@@ -1,0 +1,142 @@
+#include <Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include "HX711.h"
+#include <SoftwareSerial.h>
+
+// Pin Assignments
+#define RIGHT_IR 0           
+#define LEFT_IR 1            
+#define HX711_DT 2            
+#define HX711_SCK 3           
+#define DOOR_IR 4             
+
+// L298N Motor Driver Pins
+#define MOTOR_IN1 5
+#define MOTOR_IN2 6
+#define MOTOR_IN3 7
+#define MOTOR_IN4 8
+#define MOTOR_ENA 9
+#define MOTOR_ENB 10
+
+#define BT_RX 11              
+#define BT_TX 12              
+#define SERVO_PIN 13          
+
+// Ultrasonic Sensor
+#define US_TRIG A1           
+#define US_ECHO A2           
+#define BUZZER_PIN A3        
+
+// LCD via I2C
+LiquidCrystal_I2C lcd(0x27, 16, 2);  
+
+Servo doorServo;
+HX711 scale;
+SoftwareSerial Bluetooth(BT_RX, BT_TX);
+
+void moveForward() {
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);
+    digitalWrite(MOTOR_IN3, HIGH);
+    digitalWrite(MOTOR_IN4, LOW);
+}
+
+void moveBackward() {
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, HIGH);
+    digitalWrite(MOTOR_IN3, LOW);
+    digitalWrite(MOTOR_IN4, HIGH);
+}
+
+void turnLeft() {
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, HIGH);
+    digitalWrite(MOTOR_IN3, HIGH);
+    digitalWrite(MOTOR_IN4, LOW);
+}
+
+void turnRight() {
+    digitalWrite(MOTOR_IN1, HIGH);
+    digitalWrite(MOTOR_IN2, LOW);
+    digitalWrite(MOTOR_IN3, LOW);
+    digitalWrite(MOTOR_IN4, HIGH);
+}
+
+void stopMotors() {
+    digitalWrite(MOTOR_IN1, LOW);
+    digitalWrite(MOTOR_IN2, LOW);
+    digitalWrite(MOTOR_IN3, LOW);
+    digitalWrite(MOTOR_IN4, LOW);
+}
+
+long getDistance() {
+    digitalWrite(US_TRIG, LOW);
+    delayMicroseconds(2);
+    digitalWrite(US_TRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(US_TRIG, LOW);
+    long duration = pulseIn(US_ECHO, HIGH);
+    return duration * 0.034 / 2;  
+}
+
+void setup() {
+    Serial.begin(9600);
+    Bluetooth.begin(9600);
+    
+    pinMode(RIGHT_IR, INPUT);
+    pinMode(LEFT_IR, INPUT);
+    pinMode(DOOR_IR, INPUT);
+    
+    scale.begin(HX711_DT, HX711_SCK);
+    
+    pinMode(MOTOR_IN1, OUTPUT);
+    pinMode(MOTOR_IN2, OUTPUT);
+    pinMode(MOTOR_IN3, OUTPUT);
+    pinMode(MOTOR_IN4, OUTPUT);
+    pinMode(MOTOR_ENA, OUTPUT);
+    pinMode(MOTOR_ENB, OUTPUT);
+    
+    pinMode(BT_RX, INPUT);
+    pinMode(BT_TX, OUTPUT);
+    
+    doorServo.attach(SERVO_PIN);
+    doorServo.write(0);
+    
+    pinMode(US_TRIG, OUTPUT);
+    pinMode(US_ECHO, INPUT);
+    
+    pinMode(BUZZER_PIN, OUTPUT);
+    
+    Wire.begin();
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0, 0);
+    lcd.print("Weight: ");
+}
+
+void loop() {
+    if (Bluetooth.available()) {
+        char command = Bluetooth.read();
+        Serial.println(command);
+
+        switch (command) {
+            case 'F': moveForward(); break;
+            case 'B': moveBackward(); break;
+            case 'L': turnLeft(); break;
+            case 'R': turnRight(); break;
+            case 'S': stopMotors(); break;
+            case 'O': doorServo.write(90); break; // Open Door
+            case 'C': doorServo.write(0); break;  // Close Door
+            case 'Z': digitalWrite(BUZZER_PIN, HIGH); break;
+            case 'X': digitalWrite(BUZZER_PIN, LOW); break;
+            case 'W': 
+                float weight = scale.get_units();
+                lcd.setCursor(8, 0);
+                lcd.print(weight, 1);
+                lcd.print("g  ");
+                break;
+            default: stopMotors(); break;
+        }
+    }
+}
