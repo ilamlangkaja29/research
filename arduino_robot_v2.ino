@@ -1,186 +1,183 @@
+#include <SoftwareSerial.h>
 #include <Servo.h>
-#include <NewPing.h>
-#include <HX711.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <avr/wdt.h>  // Watchdog Timer for auto-reset
 
-// Pin Configuration
-#define IR_SENSOR 4            // Line Following IR sensor
-#define TRIG_PIN A0            // Ultrasonic sensor trigger
-#define ECHO_PIN A0            // Ultrasonic sensor echo
-#define BIN_SENSOR 11          // E18-D80NK IR sensor for bin detection
-#define SERVO_PIN 12           // Servo motor for bin lid
-#define UV_LED 13              // UV LED for disinfection
-#define BUZZER A1              // Buzzer for alerts
+#define BT_RX 2   // HC-05 TX pin
+#define BT_TX 3   // HC-05 RX pin
+SoftwareSerial BTSerial(BT_RX, BT_TX);
 
-// Motor Driver (L298N)
-#define ENA 5
-#define IN1 6
-#define IN2 7
-#define IN3 8
-#define IN4 9
-#define ENB 10
+// Motor A
+const int ENA = 5;
+const int IN1 = 6;
+const int IN2 = 7;
+#define s 180  // Base speed
+#define t 170  // Turning speed
 
-// Bluetooth module (HC-05)
-#define BT_RX 0
-#define BT_TX 1
+// Motor B
+const int ENB = 11;
+const int IN3 = 8;
+const int IN4 = 9;
 
-// Load Cell (HX711)
-#define LOADCELL_DOUT 2
-#define LOADCELL_SCK 3
+// IR Sensors
+const int IRSensorLeft = 12;
+const int IRSensorRight = 10;
 
-// LCD Display
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// Ultrasonic Sensor & Buzzer
+#define TRIG_PIN A0
+#define ECHO_PIN A1
+#define BUZZER_PIN A2
 
-// Sensors and Components
-NewPing sonar(TRIG_PIN, ECHO_PIN, 200);  // Ultrasonic sensor
-Servo binServo;
-HX711 scale;
-
-// Variables
-char command;   // Bluetooth command
-long distance;  // Ultrasonic distance
-bool lidOpen = false;
+// Servo Motor & IR Bin Sensor
+Servo myServo;
+#define SERVO_PIN 4
+#define IR_BIN_SENSOR 13
+unsigned long lastMotionTime = 0;
 
 void setup() {
-    Serial.begin(9600); // Bluetooth communication
-    
-    // Motor Pins
-    pinMode(ENA, OUTPUT);
-    pinMode(IN1, OUTPUT);
-    pinMode(IN2, OUTPUT);
-    pinMode(IN3, OUTPUT);
-    pinMode(IN4, OUTPUT);
-    pinMode(ENB, OUTPUT);
+  // Initialize hardware
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
 
-    // Sensor Pins
-    pinMode(IR_SENSOR, INPUT);
-    pinMode(BIN_SENSOR, INPUT);
-    pinMode(BUZZER, OUTPUT);
-    pinMode(UV_LED, OUTPUT);
-    digitalWrite(UV_LED, LOW); // UV LED OFF initially
+  pinMode(IRSensorLeft, INPUT);
+  pinMode(IRSensorRight, INPUT);
 
-    // Load Cell
-    scale.begin(LOADCELL_DOUT, LOADCELL_SCK);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
 
-    // Servo
-    binServo.attach(SERVO_PIN);
-    binServo.write(0); // Initial position (Closed)
+  myServo.attach(SERVO_PIN);
+  pinMode(IR_BIN_SENSOR, INPUT);
 
-    // LCD Display
-    lcd.begin();
-    lcd.backlight();
-    lcd.setCursor(0, 0);
-    lcd.print("Robot Initialized");
+  Serial.begin(9600);
+  BTSerial.begin(9600);
+
+  wdt_enable(WDTO_8S);  // Enable watchdog timer (resets in 8s if stuck)
 }
 
 void loop() {
-    // Check Ultrasonic Distance
-    distance = sonar.ping_cm();
-    if (distance > 0 && distance < 10) {
-        stopMotors();
-        digitalWrite(BUZZER, HIGH);
-        delay(1000);
-        digitalWrite(BUZZER, LOW);
-    }
+  wdt_reset();  // Reset watchdog to prevent auto-reset
+  
+  if (BTSerial.available()) {
+    char command = BTSerial.read();
+    while (BTSerial.available()) BTSerial.read();  // Flush buffer
 
-    // Line Following (Automatic Mode)
-    if (digitalRead(IR_SENSOR) == LOW) {
-        moveForward();
+    switch (command) {
+      case 'F': moveForward(); break;
+      case 'B': moveBackward(); break;
+      case 'R': turnRight(); break;
+      case 'L': turnLeft(); break;
+      case 'S': stopMotors(); break;
+      default: stopMotors(); break;
+    }
+  }
+
+  // **Ultrasonic Sensor Logic**
+  long duration, distance;
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  duration = pulseIn(ECHO_PIN, HIGH, 20000); // 20ms timeout
+  if (duration == 0) distance = 999;  // Timeout means no obstacle
+  else distance = (duration * 0.034) / 2;
+
+  if (distance > 0 && distance <= 20) {
+    digitalWrite(BUZZER_PIN, HIGH);
+  } else {
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+
+  // **Servo Motor Logic**
+  if (digitalRead(IR_BIN_SENSOR) == LOW) {
+    myServo.write(120);  // Motion detected
+    lastMotionTime = millis();
+  }
+  if (millis() - lastMotionTime >= 5000) {
+    myServo.write(0);  // Reset after 5 seconds
+  }
+
+  // **Line-Following Sensor Check**
+  bool leftSensor = digitalRead(IRSensorLeft);
+  bool rightSensor = digitalRead(IRSensorRight);
+
+  Serial.print("Left Sensor: ");
+  Serial.print(leftSensor);
+  Serial.print(" | Right Sensor: ");
+  Serial.println(rightSensor);
+
+  // **Self-Test: Detect if Sensors Fail**
+  if (leftSensor == HIGH && rightSensor == HIGH) {
+    Serial.println("⚠ Warning: Both IR sensors HIGH! Possible failure.");
+    stopMotors();
+  } else {
+    // Line Following Logic
+    if (leftSensor == LOW && rightSensor == LOW) {
+      moveForward();
+    } else if (leftSensor == LOW && rightSensor == HIGH) {
+      turnRight();
+    } else if (leftSensor == HIGH && rightSensor == LOW) {
+      turnLeft();
     } else {
-        stopMotors();
+      stopMotors();
     }
+  }
 
-    // Bin Detection & Servo Control
-    if (digitalRead(BIN_SENSOR) == LOW && !lidOpen) {
-        openLid();
-    } else if (digitalRead(BIN_SENSOR) == HIGH && lidOpen) {
-        closeLid();
-    }
-
-    // Bluetooth Control
-    if (Serial.available()) {
-        command = Serial.read();
-        executeBluetoothCommand(command);
-    }
-
-    // Load Cell Measurement
-    float weight = scale.get_units(10);
-    lcd.setCursor(0, 1);
-    lcd.print("Weight: ");
-    lcd.print(weight);
-    lcd.print("g");
-
-    delay(100);
+  delay(100);  // Short delay for stable operation
 }
 
-// Motor Control Functions
+// **Motor Control Functions**
 void moveForward() {
-    digitalWrite(IN1, HIGH);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN3, HIGH);
-    digitalWrite(IN4, LOW);
-    analogWrite(ENA, 150);
-    analogWrite(ENB, 150);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, s);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, s);
 }
 
 void moveBackward() {
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, HIGH);
-    analogWrite(ENA, 150);
-    analogWrite(ENB, 150);
-}
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, s);
 
-void turnLeft() {
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
-    digitalWrite(IN3, HIGH);
-    digitalWrite(IN4, LOW);
-    analogWrite(ENA, 150);
-    analogWrite(ENB, 150);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENB, s);
 }
 
 void turnRight() {
-    digitalWrite(IN1, HIGH);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, HIGH);
-    analogWrite(ENA, 150);
-    analogWrite(ENB, 150);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, t);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, t);
+}
+
+void turnLeft() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, t);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENB, t);
 }
 
 void stopMotors() {
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, LOW);
-}
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
 
-// Open Lid and Turn on UV LED
-void openLid() {
-    binServo.write(90); // Open lid
-    digitalWrite(UV_LED, HIGH); // Turn on UV LED
-    lidOpen = true;
-    delay(2000); // Keep lid open for 2 seconds
-}
-
-// Close Lid and Turn off UV LED
-void closeLid() {
-    binServo.write(0); // Close lid
-    digitalWrite(UV_LED, LOW); // Turn off UV LED
-    lidOpen = false;
-}
-
-// Bluetooth Command Execution
-void executeBluetoothCommand(char cmd) {
-    switch (cmd) {
-        case 'F': moveForward(); break;
-        case 'B': moveBackward(); break;
-        case 'L': turnLeft(); break;
-        case 'R': turnRight(); break;
-        case 'S': stopMotors(); break;
-        default: break;
-    }
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, 0);
 }
