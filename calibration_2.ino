@@ -4,7 +4,7 @@
 #define LOADCELL_SCK_PIN 7
 
 HX711_ADC scale(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-float calibration_factor = 2.0;  // Use your calibrated value
+float calibration_factor = 2.0;  // Initial calibration value
 float bin_weight = 0;  // Stores the bin's weight after taring
 
 void setup() {
@@ -23,6 +23,7 @@ void setup() {
   Serial.println(bin_weight);
 
   Serial.println("Weight Sensor Ready...");
+  Serial.println("Use '+' or '-' in Serial Monitor to adjust calibration.");
 }
 
 void loop() {
@@ -34,5 +35,20 @@ void loop() {
     Serial.print(garbage_weight);
     Serial.println(" g");
   }
+
+  // Adjust calibration factor via Serial Monitor
+  if (Serial.available()) {
+    char command = Serial.read();
+    if (command == '+') {
+      calibration_factor += 0.1;
+    } else if (command == '-') {
+      calibration_factor -= 0.1;
+    }
+    scale.setCalFactor(calibration_factor);
+
+    Serial.print("New Calibration Factor: ");
+    Serial.println(calibration_factor);
+  }
+
   delay(500);
 }
