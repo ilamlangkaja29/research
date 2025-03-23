@@ -80,10 +80,10 @@ void loop() {
 
     if (command == 'A') {
       mode = 'A';  
-      Serial.println("🔄 Automatic Mode (Line-Following)");
+      Serial.println("Automatic Mode (Line-Following)");
     } else if (command == 'M') {
       mode = 'M';  
-      Serial.println("🎮 Manual Mode (Bluetooth Control)");
+      Serial.println("Manual Mode (Bluetooth Control)");
       stopMotors();  
     } else if (mode == 'M') {  
       processManualCommand(command);
@@ -125,23 +125,23 @@ void runAutomaticMode() {
   long frontDistance = getUltrasonicDistance(TRIG_FRONT, ECHO_FRONT);
   long garbageDistance = getUltrasonicDistance(TRIG_GARBAGE, ECHO_GARBAGE);
 
-  // 🚨 Stop if obstacle is within 20 cm
+  // Stop if obstacle is within 20 cm
   if (frontDistance > 0 && frontDistance <= 20) {  
     stopMotors();
     digitalWrite(BUZZER_PIN, HIGH);
-    Serial.println("🛑 Obstacle detected! Stopping...");
+    Serial.println("Obstacle detected! Stopping...");
     return;  // Skip further movement
   } else {
     digitalWrite(BUZZER_PIN, LOW);
   }
 
-  // 🗑️ If garbage detected within 5 cm, activate auto mode
+  // If garbage detected within 5 cm, activate auto mode
   if (garbageDistance > 0 && garbageDistance <= 5) {
     mode = 'A';
-    Serial.println("🗑️ Garbage detected! Activating automatic mode...");
+    Serial.println("Garbage detected! Activating automatic mode...");
   }
 
-  // 🏁 Proceed with Line-Following if no obstacle
+  // Proceed with Line-Following if no obstacle
   bool leftSensor = digitalRead(IRSensorLeft);
   bool rightSensor = digitalRead(IRSensorRight);
 
@@ -156,7 +156,7 @@ void runAutomaticMode() {
   }
 }
 
-// **Function to Get Distance from Ultrasonic Sensor**
+// Function to Get Distance from Ultrasonic Sensor**
 long getUltrasonicDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
@@ -170,7 +170,7 @@ long getUltrasonicDistance(int trigPin, int echoPin) {
   return (duration * 0.034) / 2;  // Convert to cm
 }
 
-// **Motor Control Functions with Speed Parameter**
+// Motor Control Functions with Speed Parameter**
 void moveForward(int speedVal) {
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
