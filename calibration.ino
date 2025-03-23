@@ -30,9 +30,7 @@ void loop() {
     scale.update();
     float current_weight = scale.getData();
 
-    if (abs(current_weight - fixed_weight) > 1.0) {  
-      fixed_weight = current_weight;
-    }
+    fixed_weight = current_weight;  // Store last stable reading
 
     Serial.print("Stable Weight [");
     Serial.print(read_count + 1);
@@ -41,12 +39,14 @@ void loop() {
     Serial.println(" g");
 
     read_count++;  
+    delay(500);  // Wait before next reading
   } else {
     Serial.print("Final Fixed Weight: ");
     Serial.print(fixed_weight);
     Serial.println(" g");
-    while (true);  // Stop updating after 5 readings
-  }
 
-  delay(500);
+    while (true) {
+      delay(1000);  // Keep displaying final value without updating
+    }
+  }
 }
