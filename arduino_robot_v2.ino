@@ -16,9 +16,10 @@ const int ENB = 11;
 const int IN3 = 8;
 const int IN4 = 9;
 
-// Reduced speed values for heavy load
-#define s 120  // Slower base speed
-#define t 100  // Reduced turning speed
+#define BASE_SPEED 50  // Starting speed (slow start)
+#define MAX_SPEED 120  // Max speed for heavy load
+#define TURN_SPEED 80  // Speed when turning
+int currentSpeed = BASE_SPEED;
 
 // IR Sensors
 const int IRSensorLeft = 12;
@@ -35,7 +36,6 @@ Servo myServo;
 #define IR_BIN_SENSOR 13
 unsigned long lastMotionTime = 0;
 
-// Mode Selection: Automatic (A) or Manual (M)
 char mode = 'A';  // Default to Automatic Mode
 
 void setup() {
@@ -61,42 +61,42 @@ void setup() {
 
   wdt_enable(WDTO_8S);
 
-  // Ensure the bin lid starts closed on startup
-  Serial.println("🔄 Initializing... Closing Bin Lid.");
-  myServo.write(0);  // Set the servo to 0° (closed position)
-  delay(1000);  // Allow time for servo to move
+  // Close bin lid at startup
+  myServo.write(0);
+  delay(1000);
 }
 
 void loop() {
   wdt_reset();
+  checkBluetooth();
+  if (mode == 'A') {
+    runAutomaticMode();
+  }
+}
 
-  // Check for Bluetooth command
+// Check Bluetooth Commands
+void checkBluetooth() {
   if (BTSerial.available()) {
     char command = BTSerial.read();
-    while (BTSerial.available()) BTSerial.read();  // Flush buffer
+    while (BTSerial.available()) BTSerial.read();  
 
     if (command == 'A') {
-      mode = 'A';  // Enable Automatic Mode
-      Serial.println("🔄 Automatic Mode Activated (Line Following)");
+      mode = 'A';
+      Serial.println("🔄 Automatic Mode Activated");
     } else if (command == 'M') {
-      mode = 'M';  // Enable Manual Mode
-      Serial.println("🎮 Manual Mode Activated (Bluetooth Control)");
-      stopMotors();  // Stop motors when switching to manual
+      mode = 'M';
+      Serial.println("🎮 Manual Mode Activated");
+      stopMotors();
     } else if (mode == 'M') {
       processManualCommand(command);
     }
   }
-
-  if (mode == 'A') {
-    runAutomaticMode();
-  }
-
-  delay(100);
 }
 
+// Process Manual Commands
 void processManualCommand(char command) {
   switch (command) {
-    case 'F': moveForward(); break;
+    case 'F': accelerate(); break;
     case 'B': moveBackward(); break;
     case 'R': turnRight(); break;
     case 'L': turnLeft(); break;
@@ -105,6 +105,7 @@ void processManualCommand(char command) {
   }
 }
 
+// Automatic Mode (Line Following)
 void runAutomaticMode() {
   long duration, distance;
   digitalWrite(TRIG_PIN, LOW);
@@ -114,132 +115,94 @@ void runAutomaticMode() {
   digitalWrite(TRIG_PIN, LOW);
 
   duration = pulseIn(ECHO_PIN, HIGH, 20000);
-  if (duration == 0) distance = 999;
-  else distance = (duration * 0.034) / 2;
+  distance = (duration == 0) ? 999 : (duration * 0.034) / 2;
 
-  if (distance > 0 && distance <= 20) {
-    digitalWrite(BUZZER_PIN, HIGH);
-  } else {
-    digitalWrite(BUZZER_PIN, LOW);
-  }
+  digitalWrite(BUZZER_PIN, (distance <= 20) ? HIGH : LOW);
 
   if (digitalRead(IR_BIN_SENSOR) == LOW) {
-    Serial.println("🗑 Bin Detected! Opening Lid...");
-    myServo.write(120);  // Open the bin lid
+    myServo.write(120);
     lastMotionTime = millis();
   }
-  
-  // Ensure the bin lid closes after 5 seconds
   if (millis() - lastMotionTime >= 5000) {
-    Serial.println("🔄 Closing Bin Lid...");
-    myServo.write(0);  // Close the bin lid
+    myServo.write(0);
   }
 
   bool leftSensor = digitalRead(IRSensorLeft);
   bool rightSensor = digitalRead(IRSensorRight);
 
-  Serial.print("Left Sensor: ");
-  Serial.print(leftSensor);
-  Serial.print(" | Right Sensor: ");
-  Serial.println(rightSensor);
-
   if (leftSensor == HIGH && rightSensor == HIGH) {
-    Serial.println("⚠ Warning: Both IR sensors HIGH! Possible failure.");
     stopMotors();
+  } else if (leftSensor == LOW && rightSensor == LOW) {
+    accelerate();
+  } else if (leftSensor == LOW) {
+    turnRight();
   } else {
-    if (leftSensor == LOW && rightSensor == LOW) {
-      moveForward();
-    } else if (leftSensor == LOW && rightSensor == HIGH) {
-      turnRight();
-    } else if (leftSensor == HIGH && rightSensor == LOW) {
-      turnLeft();
-    } else {
-      stopMotors();
-    }
+    turnLeft();
   }
 }
 
-// Gradual acceleration for smooth movement
+// Smooth Acceleration Function
+void accelerate() {
+  while (currentSpeed < MAX_SPEED) {
+    currentSpeed += 5;  // Increase speed gradually
+    analogWrite(ENA, currentSpeed);
+    analogWrite(ENB, currentSpeed);
+    delay(50);  // Small delay for smooth acceleration
+  }
+  moveForward();
+}
+
+// Move Forward at Current Speed
 void moveForward() {
-  int speed = 0;
-  int maxSpeed = s;
-
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
+  analogWrite(ENA, currentSpeed);
+
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
-
-  while (speed < maxSpeed) {
-    speed += 5;
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(50);
-  }
+  analogWrite(ENB, currentSpeed);
 }
 
+// Move Backward
 void moveBackward() {
-  int speed = 0;
-  int maxSpeed = s;
-
+  analogWrite(ENA, BASE_SPEED);
+  analogWrite(ENB, BASE_SPEED);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, HIGH);
-
-  while (speed < maxSpeed) {
-    speed += 5;
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(50);
-  }
 }
 
-// Slower turning for better control
+// Turn Right
 void turnRight() {
-  int speed = 0;
-  int maxSpeed = t;
-
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
-
-  while (speed < maxSpeed) {
-    speed += 5;
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(50);
-  }
 }
 
+// Turn Left
 void turnLeft() {
-  int speed = 0;
-  int maxSpeed = t;
-
+  analogWrite(ENA, TURN_SPEED);
+  analogWrite(ENB, TURN_SPEED);
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, HIGH);
-
-  while (speed < maxSpeed) {
-    speed += 5;
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(50);
-  }
 }
 
-// Smooth braking to prevent jerky stops
+// Stop Motors Gradually
 void stopMotors() {
-  int speed = analogRead(ENA);
-
-  while (speed > 0) {
-    speed -= 5;
-    analogWrite(ENA, speed);
-    analogWrite(ENB, speed);
-    delay(50);
+  while (currentSpeed > BASE_SPEED) {
+    currentSpeed -= 5;
+    analogWrite(ENA, currentSpeed);
+    analogWrite(ENB, currentSpeed);
+    delay(50);  // Small delay for smooth deceleration
   }
-
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
