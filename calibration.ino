@@ -10,12 +10,20 @@ void setup() {
   Serial.println("Starting HX711...");
 
   scale.begin();
-  if (scale.isReady()) {
-    Serial.println("HX711 is ready.");
-  } else {
-    Serial.println("⚠ HX711 NOT detected. Check wiring!");
-  }
+  delay(500);  // Allow HX711 to stabilize
+
+  Serial.println("Taring...");
+  scale.tare();
+  delay(2000);
+
+  Serial.println("Start measuring...");
 }
 
 void loop() {
+  if (scale.update()) {
+    float raw_value = scale.getData();
+    Serial.print("Raw Sensor Value: ");
+    Serial.println(raw_value);
+  }
+  delay(500);
 }
