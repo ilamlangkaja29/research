@@ -1,6 +1,6 @@
 #include <SoftwareSerial.h>
 #include <Servo.h>
-#include <avr/wdt.h>
+#include <avr/wdt.h>  
 
 #define BT_RX 2  
 #define BT_TX 3  
@@ -10,16 +10,13 @@ SoftwareSerial BTSerial(BT_RX, BT_TX);
 const int ENA = 5;
 const int IN1 = 6;
 const int IN2 = 7;
+#define s 180
+#define t 170
 
 // Motor B
 const int ENB = 11;
 const int IN3 = 8;
 const int IN4 = 9;
-
-#define BASE_SPEED 50  // Starting speed (slow start)
-#define MAX_SPEED 120  // Max speed for heavy load
-#define TURN_SPEED 80  // Speed when turning
-int currentSpeed = BASE_SPEED;
 
 // IR Sensors
 const int IRSensorLeft = 12;
@@ -36,6 +33,7 @@ Servo myServo;
 #define IR_BIN_SENSOR 13
 unsigned long lastMotionTime = 0;
 
+// Mode Selection: Automatic (A) or Manual (M)
 char mode = 'A';  // Default to Automatic Mode
 
 void setup() {
@@ -59,44 +57,42 @@ void setup() {
   Serial.begin(9600);
   BTSerial.begin(9600);
 
-  wdt_enable(WDTO_8S);
+  wdt_enable(WDTO_8S);  
 
-  // Close bin lid at startup
-  myServo.write(0);
-  delay(1000);
+  // **Ensure bin lid is closed on startup**
+  myServo.write(0);  
 }
 
 void loop() {
-  wdt_reset();
-  checkBluetooth();
-  if (mode == 'A') {
-    runAutomaticMode();
-  }
-}
+  wdt_reset();  
 
-// Check Bluetooth Commands
-void checkBluetooth() {
+  // Check for Bluetooth command
   if (BTSerial.available()) {
     char command = BTSerial.read();
-    while (BTSerial.available()) BTSerial.read();  
+    while (BTSerial.available()) BTSerial.read();  // Flush buffer
 
     if (command == 'A') {
-      mode = 'A';
-      Serial.println("🔄 Automatic Mode Activated");
+      mode = 'A';  
+      Serial.println("🔄 Automatic Mode Activated (Line Following)");
     } else if (command == 'M') {
-      mode = 'M';
-      Serial.println("🎮 Manual Mode Activated");
-      stopMotors();
-    } else if (mode == 'M') {
+      mode = 'M';  
+      Serial.println("🎮 Manual Mode Activated (Bluetooth Control)");
+      stopMotors();  
+    } else if (mode == 'M') {  
       processManualCommand(command);
     }
   }
+
+  if (mode == 'A') {
+    runAutomaticMode();
+  }
+
+  delay(100);
 }
 
-// Process Manual Commands
 void processManualCommand(char command) {
   switch (command) {
-    case 'F': accelerate(); break;
+    case 'F': moveForward(); break;
     case 'B': moveBackward(); break;
     case 'R': turnRight(); break;
     case 'L': turnLeft(); break;
@@ -105,7 +101,6 @@ void processManualCommand(char command) {
   }
 }
 
-// Automatic Mode (Line Following)
 void runAutomaticMode() {
   long duration, distance;
   digitalWrite(TRIG_PIN, LOW);
@@ -114,97 +109,95 @@ void runAutomaticMode() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  duration = pulseIn(ECHO_PIN, HIGH, 20000);
-  distance = (duration == 0) ? 999 : (duration * 0.034) / 2;
+  duration = pulseIn(ECHO_PIN, HIGH, 20000); 
+  if (duration == 0) distance = 999;  
+  else distance = (duration * 0.034) / 2;
 
-  digitalWrite(BUZZER_PIN, (distance <= 20) ? HIGH : LOW);
+  if (distance > 0 && distance <= 20) {
+    digitalWrite(BUZZER_PIN, HIGH);
+  } else {
+    digitalWrite(BUZZER_PIN, LOW);
+  }
 
+  // **Handle bin lid opening & closing**
   if (digitalRead(IR_BIN_SENSOR) == LOW) {
-    myServo.write(120);
+    myServo.write(120);  // Open bin
     lastMotionTime = millis();
   }
   if (millis() - lastMotionTime >= 5000) {
-    myServo.write(0);
+    myServo.write(0);  // Close bin after 5 seconds
   }
 
   bool leftSensor = digitalRead(IRSensorLeft);
   bool rightSensor = digitalRead(IRSensorRight);
 
+  Serial.print("Left Sensor: ");
+  Serial.print(leftSensor);
+  Serial.print(" | Right Sensor: ");
+  Serial.println(rightSensor);
+
   if (leftSensor == HIGH && rightSensor == HIGH) {
+    Serial.println("⚠ Warning: Both IR sensors HIGH! Possible failure.");
     stopMotors();
-  } else if (leftSensor == LOW && rightSensor == LOW) {
-    accelerate();
-  } else if (leftSensor == LOW) {
-    turnRight();
   } else {
-    turnLeft();
+    if (leftSensor == LOW && rightSensor == LOW) {
+      moveForward();
+    } else if (leftSensor == LOW && rightSensor == HIGH) {
+      turnRight();
+    } else if (leftSensor == HIGH && rightSensor == LOW) {
+      turnLeft();
+    } else {
+      stopMotors();
+    }
   }
 }
 
-// Smooth Acceleration Function
-void accelerate() {
-  while (currentSpeed < MAX_SPEED) {
-    currentSpeed += 5;  // Increase speed gradually
-    analogWrite(ENA, currentSpeed);
-    analogWrite(ENB, currentSpeed);
-    delay(50);  // Small delay for smooth acceleration
-  }
-  moveForward();
-}
-
-// Move Forward at Current Speed
 void moveForward() {
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
-  analogWrite(ENA, currentSpeed);
+  analogWrite(ENA, s);
 
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
-  analogWrite(ENB, currentSpeed);
+  analogWrite(ENB, s);
 }
 
-// Move Backward
 void moveBackward() {
-  analogWrite(ENA, BASE_SPEED);
-  analogWrite(ENB, BASE_SPEED);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
+  analogWrite(ENA, s);
+
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, HIGH);
+  analogWrite(ENB, s);
 }
 
-// Turn Right
 void turnRight() {
-  analogWrite(ENA, TURN_SPEED);
-  analogWrite(ENB, TURN_SPEED);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
+  analogWrite(ENA, t);
+
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
+  analogWrite(ENB, t);
 }
 
-// Turn Left
 void turnLeft() {
-  analogWrite(ENA, TURN_SPEED);
-  analogWrite(ENB, TURN_SPEED);
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
+  analogWrite(ENA, t);
+
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, HIGH);
+  analogWrite(ENB, t);
 }
 
-// Stop Motors Gradually
 void stopMotors() {
-  while (currentSpeed > BASE_SPEED) {
-    currentSpeed -= 5;
-    analogWrite(ENA, currentSpeed);
-    analogWrite(ENB, currentSpeed);
-    delay(50);  // Small delay for smooth deceleration
-  }
-  analogWrite(ENA, 0);
-  analogWrite(ENB, 0);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, LOW);
+  analogWrite(ENB, 0);
 }
