@@ -25,10 +25,14 @@ int manualSpeed = 180;          // Default speed for manual mode
 const int IRSensorLeft = 12;
 const int IRSensorRight = 10;
 
-// Ultrasonic Sensor & Buzzer
-#define TRIG_PIN A0
-#define ECHO_PIN A1
-#define BUZZER_PIN A2
+// **Ultrasonic Sensor & Buzzer**
+#define TRIG_FRONT A0   // Front Ultrasonic - Trigger
+#define ECHO_FRONT A1   // Front Ultrasonic - Echo
+#define BUZZER_PIN A2   // Buzzer
+
+// **Bin Ultrasonic Sensor**
+#define TRIG_BIN A3     // Bin Ultrasonic - Trigger
+#define ECHO_BIN A4     // Bin Ultrasonic - Echo
 
 // Servo Motor & IR Bin Sensor
 Servo myServo;
@@ -50,9 +54,12 @@ void setup() {
   pinMode(IRSensorLeft, INPUT);
   pinMode(IRSensorRight, INPUT);
 
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  pinMode(TRIG_FRONT, OUTPUT);
+  pinMode(ECHO_FRONT, INPUT);
   pinMode(BUZZER_PIN, OUTPUT);
+
+  pinMode(TRIG_BIN, OUTPUT);
+  pinMode(ECHO_BIN, INPUT);
 
   myServo.attach(SERVO_PIN);
   pinMode(IR_BIN_SENSOR, INPUT);
@@ -89,6 +96,9 @@ void loop() {
   if (mode == 'A') {
     runAutomaticMode();
   }
+
+  checkObstacle();
+  checkGarbage();
 
   delay(100);
 }
@@ -141,6 +151,44 @@ void runAutomaticMode() {
       stopMotors();
     }
   }
+}
+
+// **Ultrasonic Obstacle Detection**
+void checkObstacle() {
+  long distance = getUltrasonicDistance(TRIG_FRONT, ECHO_FRONT);
+  
+  if (distance > 0 && distance <= 20) {
+    Serial.println("🚧 Obstacle detected! Stopping...");
+    digitalWrite(BUZZER_PIN, HIGH);
+    stopMotors();
+    delay(500);
+  } else {
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+}
+
+// **Ultrasonic Garbage Detection**
+void checkGarbage() {
+  long binDistance = getUltrasonicDistance(TRIG_BIN, ECHO_BIN);
+
+  if (binDistance > 0 && binDistance <= 5) {
+    Serial.println("🗑 Garbage Detected! Activating Auto Mode.");
+    mode = 'A';  
+  }
+}
+
+// **Ultrasonic Sensor Reading**
+long getUltrasonicDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 20000);  
+  if (duration == 0) return 999;  
+
+  return (duration * 0.034) / 2;  
 }
 
 // **Updated Motor Control Functions with Speed Parameter**
