@@ -4,9 +4,7 @@
 #define LOADCELL_SCK_PIN 3   
 
 HX711_ADC scale(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-float fixed_weight = 0;  
-int read_count = 0;
-const int max_reads = 5;  // Take only 5 readings
+float calibration_factor = 1.0;  // Adjust this to correct the reading
 
 void setup() {
   Serial.begin(115200);
@@ -22,31 +20,21 @@ void setup() {
   scale.tare();
   delay(2000);
 
-  Serial.println("Calibration complete.");
+  Serial.println("Place a known weight (500g) on the sensor.");
+  delay(5000);  // Give time to place weight
 }
 
 void loop() {
-  if (read_count < max_reads) {
-    scale.update();
-    float current_weight = scale.getData();
+  scale.update();
+  float raw_weight = scale.getData();
 
-    fixed_weight = current_weight;  // Store last stable reading
+  float adjusted_weight = raw_weight * calibration_factor;  // Apply correction
 
-    Serial.print("Stable Weight [");
-    Serial.print(read_count + 1);
-    Serial.print("/5]: ");
-    Serial.print(fixed_weight);
-    Serial.println(" g");
+  Serial.print("Raw Weight: ");
+  Serial.print(raw_weight);
+  Serial.print(" | Adjusted Weight: ");
+  Serial.print(adjusted_weight);
+  Serial.println(" g");
 
-    read_count++;  
-    delay(500);  // Wait before next reading
-  } else {
-    Serial.print("Final Fixed Weight: ");
-    Serial.print(fixed_weight);
-    Serial.println(" g");
-
-    while (true) {
-      delay(1000);  // Keep displaying final value without updating
-    }
-  }
+  delay(1000);
 }
