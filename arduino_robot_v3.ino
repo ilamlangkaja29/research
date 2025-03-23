@@ -21,18 +21,16 @@ const int IN4 = 9;
 #define AUTO_TURN_SPEED 120     // Reduced speed for smooth turns
 int manualSpeed = 180;          // Default speed for manual mode
 
-// IR Sensors
+// IR Sensors (Line Following)
 const int IRSensorLeft = 12;
 const int IRSensorRight = 10;
 
-// **Ultrasonic Sensor & Buzzer**
-#define TRIG_FRONT A0   // Front Ultrasonic - Trigger
-#define ECHO_FRONT A1   // Front Ultrasonic - Echo
-#define BUZZER_PIN A2   // Buzzer
-
-// **Bin Ultrasonic Sensor**
-#define TRIG_BIN A3     // Bin Ultrasonic - Trigger
-#define ECHO_BIN A4     // Bin Ultrasonic - Echo
+// **Ultrasonic Sensors & Buzzer**
+#define TRIG_FRONT A0   // Front Ultrasonic Sensor (Obstacle Detection)
+#define ECHO_FRONT A1
+#define TRIG_GARBAGE A3 // Garbage Detection Ultrasonic Sensor
+#define ECHO_GARBAGE A4
+#define BUZZER_PIN A2
 
 // Servo Motor & IR Bin Sensor
 Servo myServo;
@@ -56,10 +54,9 @@ void setup() {
 
   pinMode(TRIG_FRONT, OUTPUT);
   pinMode(ECHO_FRONT, INPUT);
+  pinMode(TRIG_GARBAGE, OUTPUT);
+  pinMode(ECHO_GARBAGE, INPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-
-  pinMode(TRIG_BIN, OUTPUT);
-  pinMode(ECHO_BIN, INPUT);
 
   myServo.attach(SERVO_PIN);
   pinMode(IR_BIN_SENSOR, INPUT);
@@ -76,7 +73,7 @@ void setup() {
 void loop() {
   wdt_reset();  
 
-  // Check for Bluetooth command
+  // **Check for Bluetooth command**
   if (BTSerial.available()) {
     char command = BTSerial.read();
     while (BTSerial.available()) BTSerial.read();  // Flush buffer
@@ -96,9 +93,6 @@ void loop() {
   if (mode == 'A') {
     runAutomaticMode();
   }
-
-  checkObstacle();
-  checkGarbage();
 
   delay(100);
 }
@@ -128,70 +122,55 @@ void processManualCommand(char command) {
 }
 
 void runAutomaticMode() {
-  bool leftSensor = digitalRead(IRSensorLeft);
-  bool rightSensor = digitalRead(IRSensorRight);
+  long frontDistance = getUltrasonicDistance(TRIG_FRONT, ECHO_FRONT);
+  long garbageDistance = getUltrasonicDistance(TRIG_GARBAGE, ECHO_GARBAGE);
 
-  Serial.print("Left Sensor: ");
-  Serial.print(leftSensor);
-  Serial.print(" | Right Sensor: ");
-  Serial.println(rightSensor);
-
-  // **Stable Line-Following Logic**
-  if (leftSensor == HIGH && rightSensor == HIGH) {
-    Serial.println("⚠ Both Sensors HIGH - Possible Error");
+  // 🚨 Stop if obstacle is within 20 cm
+  if (frontDistance > 0 && frontDistance <= 20) {  
     stopMotors();
-  } else {
-    if (leftSensor == LOW && rightSensor == LOW) {
-      moveForward(AUTO_FORWARD_SPEED);  // Smooth forward movement
-    } else if (leftSensor == LOW && rightSensor == HIGH) {
-      turnRight(AUTO_TURN_SPEED);  // Slightly slower right turn
-    } else if (leftSensor == HIGH && rightSensor == LOW) {
-      turnLeft(AUTO_TURN_SPEED);  // Slightly slower left turn
-    } else {
-      stopMotors();
-    }
-  }
-}
-
-// **Ultrasonic Obstacle Detection**
-void checkObstacle() {
-  long distance = getUltrasonicDistance(TRIG_FRONT, ECHO_FRONT);
-  
-  if (distance > 0 && distance <= 20) {
-    Serial.println("🚧 Obstacle detected! Stopping...");
     digitalWrite(BUZZER_PIN, HIGH);
-    stopMotors();
-    delay(500);
+    Serial.println("🛑 Obstacle detected! Stopping...");
+    return;  // Skip further movement
   } else {
     digitalWrite(BUZZER_PIN, LOW);
   }
-}
 
-// **Ultrasonic Garbage Detection**
-void checkGarbage() {
-  long binDistance = getUltrasonicDistance(TRIG_BIN, ECHO_BIN);
+  // 🗑️ If garbage detected within 5 cm, activate auto mode
+  if (garbageDistance > 0 && garbageDistance <= 5) {
+    mode = 'A';
+    Serial.println("🗑️ Garbage detected! Activating automatic mode...");
+  }
 
-  if (binDistance > 0 && binDistance <= 5) {
-    Serial.println("🗑 Garbage Detected! Activating Auto Mode.");
-    mode = 'A';  
+  // 🏁 Proceed with Line-Following if no obstacle
+  bool leftSensor = digitalRead(IRSensorLeft);
+  bool rightSensor = digitalRead(IRSensorRight);
+
+  if (leftSensor == LOW && rightSensor == LOW) {
+    moveForward(AUTO_FORWARD_SPEED);
+  } else if (leftSensor == LOW && rightSensor == HIGH) {
+    turnRight(AUTO_TURN_SPEED);
+  } else if (leftSensor == HIGH && rightSensor == LOW) {
+    turnLeft(AUTO_TURN_SPEED);
+  } else {
+    stopMotors();
   }
 }
 
-// **Ultrasonic Sensor Reading**
+// **Function to Get Distance from Ultrasonic Sensor**
 long getUltrasonicDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
-
-  long duration = pulseIn(echoPin, HIGH, 20000);  
-  if (duration == 0) return 999;  
-
-  return (duration * 0.034) / 2;  
+  
+  long duration = pulseIn(echoPin, HIGH, 20000);  // Limit timeout
+  if (duration == 0) return 999;  // No echo detected (max distance)
+  
+  return (duration * 0.034) / 2;  // Convert to cm
 }
 
-// **Updated Motor Control Functions with Speed Parameter**
+// **Motor Control Functions with Speed Parameter**
 void moveForward(int speedVal) {
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
